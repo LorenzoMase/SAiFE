@@ -120,7 +120,7 @@ const ShapeNode = ({id, selected, data}: any) => {
                     fill={color}
                     strokeWidth={1}
                     stroke={"#000"}
-                    fillOpacity={0.7}
+                    fillOpacity={0.8}
                 />
             </div>
             <Handle

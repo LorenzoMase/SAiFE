@@ -6,7 +6,7 @@ const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "Diagram Editor",
-  description: "Create beautiful diagrams quickly",
+  description: "Diagram Editor for Agon Framework",
 };
 
 export default function RootLayout({

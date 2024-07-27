@@ -18,7 +18,7 @@ function ShapeNodeToolbar({
   const [iconName, setIconName] = useState("");
 
   const colors = [
-    "#BDD7EF",
+    "#BDD7EE",
     "#F7CBAC",
     "#438D57",
     "#FFFFFF"
