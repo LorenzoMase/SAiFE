@@ -62,7 +62,7 @@ const Flow = () => {
     const themeHook = useTheme();
     const apiKey = process.env.NEXT_PUBLIC_API_KEY;
     if (!apiKey) {
-  throw new Error("API_KEY non trovata! Controlla il file .env");
+  throw new Error("API_KEY not found");
 }
     const genAI = new GoogleGenerativeAI(apiKey);
     const [loading, setLoading] = useState(false);
