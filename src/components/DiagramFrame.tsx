@@ -60,7 +60,10 @@ const Flow = () => {
     const [width] = useWindowSize();
     const [isModalOpen, setIsModalOpen] = useState(true);
     const themeHook = useTheme();
-    const apiKey = "AIzaSyB7CvQfInd-nDUSsetox8ROXITBlVvR2to";
+    const apiKey = process.env.NEXT_PUBLIC_API_KEY;
+    if (!apiKey) {
+  throw new Error("API_KEY non trovata! Controlla il file .env");
+}
     const genAI = new GoogleGenerativeAI(apiKey);
     const [loading, setLoading] = useState(false);
 
