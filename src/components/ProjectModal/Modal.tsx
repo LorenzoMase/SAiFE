@@ -32,9 +32,12 @@ const ProjectModal = ({onSubmit}: ModalProps) => {
                                             Please write about your project briefly.
                                         </p>
                                     </div>
-                                    <input
-                                        className="bg-gray-200 appearance-none border-2 border-gray-200 rounded w-full py-2 px-4 text-gray-700 leading-tight focus:outline-none focus:bg-white focus:border-purple-500"
-                                        id="inline-full-name" type="text" value={description} onChange={onInputChange}/>
+                                    <textarea
+                                        className="bg-gray-200 appearance-none border-2 border-gray-200 rounded w-full py-2 px-4 text-gray-700 text-sm leading-tight focus:outline-none focus:bg-white focus:border-purple-500"
+                                        id="project-description"
+                                        value={description}
+                                        onChange={(e) => setDescription(e.target.value)}
+                                        rows={3}/>
                                 </div>
                             </div>
                         </div>
