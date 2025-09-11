@@ -15,8 +15,8 @@ const downloadImage = (dataUrl: string) => {
   a.click();
 };
 
-const imageWidth = 1024;
-const imageHeight = 768;
+const imageWidth = 1600;
+const imageHeight = 1200;
 
 export const DownloadImageButton = (props: { useDiagram: any }) => {
   const { getNodes } = useReactFlow();
@@ -26,8 +26,17 @@ export const DownloadImageButton = (props: { useDiagram: any }) => {
     // we then overwrite the transform of the `.react-flow__viewport` element
     // with the style option of the html-to-image library
     const nodesBounds = getNodesBounds(getNodes());
+    
+    const margin = 100;
+    const nodesBoundsWithMargin = {
+    x: nodesBounds.x - margin,
+    y: nodesBounds.y - margin,
+    width: nodesBounds.width + margin * 2,
+    height: nodesBounds.height + margin * 2,
+    };
+    
     const transform = getViewportForBounds(
-      nodesBounds,
+      nodesBoundsWithMargin,
       imageWidth,
       imageHeight,
       0.5,
@@ -35,16 +44,18 @@ export const DownloadImageButton = (props: { useDiagram: any }) => {
       0.2
     );
 
-    toPng(document.querySelector(".react-flow__viewport") as HTMLElement, {
-      backgroundColor: "white",
-      width: imageWidth,
-      height: imageHeight,
-      style: {
-        width: `${imageWidth}`,
-        height: `${imageHeight}`,
-        transform: `translate(${transform.x}px, ${transform.y}px) scale(${transform.zoom})`,
-      },
-    }).then(downloadImage);
+    setTimeout(() => {
+      toPng(document.querySelector(".react-flow__viewport") as HTMLElement, {
+        backgroundColor: "white",
+        width: imageWidth,
+        height: imageHeight,
+        style: {
+          width: `${imageWidth}`,
+          height: `${imageHeight}`,
+          transform: `translate(${transform.x}px, ${transform.y}px) scale(${transform.zoom})`,
+        },
+      }).then(downloadImage);
+    }, 2000);
   };
 
   return (
