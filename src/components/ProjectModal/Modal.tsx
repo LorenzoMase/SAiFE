@@ -2,14 +2,15 @@ import {useState} from "react";
 
 
 interface ModalProps {
-    onSubmit: (description: string) => void;
+    onSubmit: (description: string, includeNonFunctional: boolean) => void;
 }
 
 const ProjectModal = ({onSubmit}: ModalProps) => {
     const [description, setDescription] = useState("");
+    const [includeNonFunctional, setIncludeNonFunctional] = useState(true);
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        onSubmit(description);
+        onSubmit(description, includeNonFunctional);
     };
     const onInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setDescription(e.target.value);
@@ -38,6 +39,18 @@ const ProjectModal = ({onSubmit}: ModalProps) => {
                                         value={description}
                                         onChange={(e) => setDescription(e.target.value)}
                                         rows={3}/>
+                                    <div className="flex items-center mt-2">
+                                        <input
+                                            id="include-non-functional"
+                                            type="checkbox"
+                                            checked={includeNonFunctional}
+                                            onChange={e => setIncludeNonFunctional(e.target.checked)}
+                                            className="mr-2"
+                                        />
+                                        <label htmlFor="include-non-functional" className="text-sm text-gray-700">
+                                            Include non-functional requirements
+                                        </label>
+                                    </div>
                                 </div>
                             </div>
                         </div>
