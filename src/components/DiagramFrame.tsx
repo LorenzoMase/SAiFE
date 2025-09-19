@@ -42,7 +42,7 @@ import {Menu} from "./Menu";
 import {GoogleGenerativeAI} from "@google/generative-ai";
 import ProjectModal from "@components/ProjectModal/Modal";
 import {ClipLoader} from "react-spinners";
-
+import type { Node, NodeMouseHandler } from "@xyflow/react";
 const nodeTypes: NodeTypes = {
     shape: ShapeNode,
 };
@@ -59,6 +59,8 @@ const Flow = () => {
     const [isLeftSidebarOpen, setIsLeftSidebarOpen] = useState<boolean>(false);
     const [width] = useWindowSize();
     const [isModalOpen, setIsModalOpen] = useState(true);
+    const [originalDescription, setOriginalDescription] = useState<string>("");
+    const [includeNonFunctionalState, setIncludeNonFunctionalState] = useState<boolean>(false);
     const themeHook = useTheme();
     const apiKey = process.env.NEXT_PUBLIC_API_KEY;
     if (!apiKey) {
@@ -66,6 +68,8 @@ const Flow = () => {
 }
     const genAI = new GoogleGenerativeAI(apiKey);
     const [loading, setLoading] = useState(false);
+    const [firstGeminiResult, setFirstGeminiResult] = useState<string>("");
+    const [originalPrompt, setOriginalPrompt] = useState<string>("");
 
     const model = genAI.getGenerativeModel({
         model: "gemini-2.5-flash",
@@ -82,16 +86,12 @@ const Flow = () => {
     const handleModalSubmit = async (description: string, includeNonFunctional: boolean) => {
         setLoading(true);
         setIsModalOpen(false);
+        setOriginalDescription(description);
+        setIncludeNonFunctionalState(includeNonFunctional);
         const nonFunctionalInstruction = includeNonFunctional
             ? "Include also non-functional requirements (soft goals, round-rectangle nodes) in the model."
             : "Do NOT include non-functional requirements (no soft goals, no round-rectangle nodes) in the model.";
-        const chatSession = model.startChat({
-            generationConfig,
-            history: [
-                {
-                    role: "user",
-                    parts: [
-                    {text: `You are a requirements analyst. Your task is to generate an Initial Requirements Model of a software system as a tree-structured graph in JSON format, with two sections: nodes and edges.
+        const originalPrompt = `You are a requirements analyst. Your task is to generate an Initial Requirements Model of a software system as a tree-structured graph in JSON format, with two sections: nodes and edges.
 ${nonFunctionalInstruction}
 
 Node types:
@@ -127,14 +127,13 @@ Rules:
     - Use capsule: AND only if a node has two or more children.
     - The AND operator must be placed above its children.
 4. Layout:
-    - No overlapping nodes nor edges.
-    - Edges must never cross other edges or nodes.
-    - Subtrees must be visually well separated.
-    - Nodes at the same level must be at least 200px apart on the x-axis.
-    - Keep the system’s centroid close to the root node, take more space if required for a more comprehensive graph.
+    - NEVER make nodes overlap.
+    - Edges must NEVER cross other edges or nodes.
+    - Subtrees must be visually well composed and distinguishable.
+    - Nodes at the same y-axis be at least 200px apart on the x-axis.
     - Edges must be at least 30px long.
 5. Style:
-    - Keep it coincice and simple.
+    - Keep it coincise and simple.
     - Remember to implement cybersecurity requirements.
     - All nodes must have color #438D57.
     - Node sizes must be consistent with the provided example.
@@ -196,11 +195,14 @@ Here is an example of the expected JSON format:
     }
   ]
 }
-Output only the JSON, no explanations.`
-                    }]},
-            ],
+Output only the JSON, no explanations.`;
+        setOriginalPrompt(originalPrompt);
+        const chatSession = model.startChat({
+            generationConfig,
+            history: []
         });
-        const result = await chatSession.sendMessage("Generate the response and it must be JSON");
+        const result = await chatSession.sendMessage(originalPrompt);
+        setFirstGeminiResult(result.response.text());
         try {
             if (JSON.parse(result.response.text())) {
                 diagram.uploadJson(result.response.text());
@@ -214,6 +216,39 @@ Output only the JSON, no explanations.`
             setLoading(false);
         }
     }
+
+    const generateTaskDiagram = async (taskName: string, includeNonFunctional: boolean) => {
+        setLoading(true);
+        const nonFunctionalInstruction = includeNonFunctional
+            ? "Include also non-functional requirements (soft goals, round-rectangle nodes) in the model."
+            : "Do NOT include non-functional requirements (no soft goals, no round-rectangle nodes) in the model.";
+    
+        const taskPrompt = `Now, focus ONLY on the task: ${taskName}. Generate a small requirements model for this specific task, keeping the context of the original description, and using the same exact rules.\nOutput only the JSON, no explanations.`;
+        const chatSession = model.startChat({
+            generationConfig,
+            history: [
+                {
+                    role: "user",
+                    parts: [ { text: originalPrompt } ]
+                },
+                {
+                    role: "model",
+                    parts: [ { text: firstGeminiResult } ]
+                }
+            ]
+        });
+        const result = await chatSession.sendMessage(taskPrompt);
+        try {
+            if (JSON.parse(result.response.text())) {
+                diagram.uploadJson(result.response.text());
+            }
+        } catch (e) {
+            console.log(e);
+            console.log(result.response.text());
+        } finally {
+            setLoading(false);
+        }
+    };
 
     const getDefaultSize = (w: number) => {
         if (w < 1024) {
@@ -238,6 +273,14 @@ Output only the JSON, no explanations.`
     const edgeTypes: EdgeTypes = {
         "editable-edge": EditableEdgeWrapper,
     };
+
+
+    const handleNodeClick: NodeMouseHandler = useCallback((event, node: Node) => {
+        if (node?.data?.type === "hexagon" && originalDescription) {
+            const taskName = String(node.data.contents);
+            generateTaskDiagram(taskName, includeNonFunctionalState);
+        }
+    }, [originalDescription, includeNonFunctionalState]);
 
     return (
         <div className="w-full h-full">
@@ -301,7 +344,7 @@ Output only the JSON, no explanations.`
                                 onNodeDragStart={diagram.onNodeDragStart}
                                 onSelectionDragStart={diagram.onSelectionDragStart}
                                 onNodesDelete={diagram.onNodesDelete}
-                                onNodeClick={diagram.onNodeClick}
+                                onNodeClick={handleNodeClick}
                                 onEdgesDelete={diagram.onEdgesDelete}
                                 onEdgeClick={diagram.onEdgeClick}
                                 elevateEdgesOnSelect
