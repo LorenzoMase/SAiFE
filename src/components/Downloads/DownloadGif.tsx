@@ -48,8 +48,10 @@ export const DownloadGifButton = (props: { useDiagram: any }) => {
         const link = document.createElement("a");
         link.href = url;
         link.download = "DiagramX.svg";
+        setTimeout(() => {
         link.click();
         URL.revokeObjectURL(url);
+        },1000);
       });
     } catch (e) {
       console.error(e);

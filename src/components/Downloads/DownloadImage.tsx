@@ -55,7 +55,7 @@ export const DownloadImageButton = (props: { useDiagram: any }) => {
           transform: `translate(${transform.x}px, ${transform.y}px) scale(${transform.zoom})`,
         },
       }).then(downloadImage);
-    }, 2000);
+    }, 1000);
   };
 
   return (
