@@ -30,7 +30,7 @@ import {
 const JsonViewer = dynamic(() => import("./JsonViewer/JsonViewer"), {
     ssr: false,
 });
-import {useCallback, useEffect, useRef, useState} from "react";
+import {useCallback, useState} from "react";
 import {useWindowSize} from "@/hooks/useWindowSize";
 import dynamic from "next/dynamic";
 import {EditableEdge} from "./edges/EditableEdge";
@@ -134,6 +134,7 @@ Rules:
     - Edges must be at least 30px long.
 5. Style:
     - Keep it coincise and simple.
+    - The text of the nodes must NEVER be longer than the node itself.
     - Remember to implement cybersecurity requirements.
     - All nodes must have color #438D57.
     - Node sizes must be consistent with the provided example.
