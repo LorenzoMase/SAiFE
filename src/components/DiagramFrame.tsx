@@ -39,6 +39,7 @@ import {ConnectionLine} from "./edges/ConnectionLine";
 import savedDiagramJson from "../json-diagrams/DiagramX.json";
 import {useTheme} from "@/hooks/useTheme";
 import {Menu} from "./Menu";
+import CodeModal from "@components/CodeModal/CodeModal";
 import {GoogleGenerativeAI} from "@google/generative-ai";
 import ProjectModal from "@components/ProjectModal/Modal";
 import {ClipLoader} from "react-spinners";
@@ -68,6 +69,9 @@ const Flow = () => {
 }
     const genAI = new GoogleGenerativeAI(apiKey);
     const [loading, setLoading] = useState(false);
+    const [codeModalOpen, setCodeModalOpen] = useState(false);
+    const [generatedCode, setGeneratedCode] = useState<string>("");
+    const [codeLoading, setCodeLoading] = useState(false);
     const [firstGeminiResult, setFirstGeminiResult] = useState<string>("");
     const [originalPrompt, setOriginalPrompt] = useState<string>("");
 
@@ -218,13 +222,54 @@ Output only the JSON, no explanations.`;
         }
     }
 
+    const generateCodeFromGraph = async () => {
+        try {
+            setCodeModalOpen(true);
+            setCodeLoading(true);
+            const graphJson = getSnapshotJson();
+            const codePrompt = `You are a senior software engineer. Given this requirements graph in JSON with nodes and edges, generate secure, based on OWASP top 10 and CWEs, code that reflects the current model.
+
+Graph JSON:
+${graphJson}
+
+Instructions:
+- Infer main capabilities from circle/hexagon nodes and relationships.
+- Divide the code in logical functions based on tasks and sub-goals.
+- Output ONLY code (no explanations).
+- Keep code short and focused; avoid placeholders if not necessary.
+- Assume the language based on the most used for the tasks.
+- Make the code secure, following OWASP Top 10 and common CWEs.
+- Ensure no hardcoded secrets, use environment variables.
+- Validate and sanitize all inputs.
+- Implement proper error handling and logging.
+- Use HTTPS and secure headers.
+- Protect against common vulnerabilities (e.g., SQL injection, XSS).
+- Include minimalistic comments for clarity
+- Generate a single file with secure functions`;
+            const codeGenerationConfig = {
+                ...generationConfig,
+                responseMimeType: "text/plain",
+            } as const;
+
+            const chatSession = model.startChat({ generationConfig: codeGenerationConfig, history: [] });
+            const result = await chatSession.sendMessage(codePrompt);
+            const text = result.response.text();
+            setGeneratedCode(text);
+        } catch (e) {
+            console.error(e);
+            setGeneratedCode("// Error generating code. Please try again.");
+        } finally {
+            setCodeLoading(false);
+        }
+    };
+
     const generateTaskDiagram = async (taskName: string, includeNonFunctional: boolean) => {
         setLoading(true);
         const nonFunctionalInstruction = includeNonFunctional
             ? "Include also non-functional requirements (soft goals, round-rectangle nodes) in the model."
             : "Do NOT include non-functional requirements (no soft goals, no round-rectangle nodes) in the model.";
     
-        const taskPrompt = `Now, focus ONLY on the task: ${taskName}. Generate a small requirements model for this specific task, keeping the context of the original description, and using the same exact rules.\nOutput only the JSON, no explanations.`;
+        const taskPrompt = `Now, focus ONLY on the task: ${taskName}. Generate a small requirements model for this specific task, keeping the context of the original description, and using the same exact rules. The graph must be very small and specific on the single task.\nOutput only the JSON, no explanations.`;
         const chatSession = model.startChat({
             generationConfig,
             history: [
@@ -421,6 +466,25 @@ Output only the JSON, no explanations.`;
                     </PanelGroup>
                 </ResizablePanel>
             </PanelGroup>
+            {!loading && (
+                <div className="fixed bottom-4 right-4 z-[9998]">
+                    <div className="rounded-md bg-white/80 p-2 shadow-md backdrop-blur dark:bg-black/60">
+                        <button
+                            onClick={generateCodeFromGraph}
+                            className="rounded-md bg-emerald-600 px-3 py-1 text-sm text-white hover:bg-emerald-700"
+                            title="Generate Code"
+                        >
+                            Generate Code
+                        </button>
+                    </div>
+                </div>
+            )}
+            <CodeModal
+                isOpen={codeModalOpen}
+                onClose={() => setCodeModalOpen(false)}
+                code={generatedCode}
+                isLoading={codeLoading}
+            />
         </div>
     );
 };
