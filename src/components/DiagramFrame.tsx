@@ -74,7 +74,8 @@ const Flow = () => {
     const [codeLoading, setCodeLoading] = useState(false);
     const [firstGeminiResult, setFirstGeminiResult] = useState<string>("");
     const [originalPrompt, setOriginalPrompt] = useState<string>("");
-    
+    const [graphIndex, setGraphIndex] = useState<number>(-1);
+    const graphsHistory = useRef<string[]>([]);
     const model = genAI.getGenerativeModel({
         model: "gemini-2.5-flash",
     });
@@ -216,6 +217,8 @@ const Flow = () => {
                 diagram.uploadJson(result.response.text());
                 console.log(diagram);
                 console.log(result.response.text());
+                graphsHistory.current = [result.response.text()];
+                setGraphIndex(0);
             }
         } catch (e) {
             console.log(e);
@@ -289,6 +292,8 @@ const Flow = () => {
         try {
             if (JSON.parse(result.response.text())) {
                 diagram.uploadJson(result.response.text());
+                graphsHistory.current.push(result.response.text());
+                setGraphIndex(graphsHistory.current.length - 1);
             }
         } catch (e) {
             console.log(e);
@@ -329,6 +334,31 @@ const Flow = () => {
             generateTaskDiagram(taskName, includeNonFunctionalState);
         }
     }, [originalDescription, includeNonFunctionalState]);
+
+    const nextGraph = () => {
+        if (graphIndex < graphsHistory.current.length - 1) {
+            const newIndex = graphIndex + 1;
+            setGraphIndex(newIndex);
+            const graph = graphsHistory.current[newIndex];
+            diagram.uploadJson(graph);
+        }
+    };
+
+    const previousGraph = () => {
+        if (graphIndex > 0) {
+            const newIndex = graphIndex - 1;
+            setGraphIndex(newIndex);
+            const graph = graphsHistory.current[newIndex];
+            diagram.uploadJson(graph);
+        }
+    };
+    
+    useEffect(() => {
+        return () => {
+            graphsHistory.current = [];
+            setGraphIndex(-1);
+        };
+    }, []);
 
     return (
         <div className="w-full h-full">
@@ -478,6 +508,22 @@ const Flow = () => {
                             title="Generate Code"
                             >
                             Generate Code
+                        </button>
+                        <button
+                            disabled={graphIndex <= 0}
+                            onClick={previousGraph}
+                            className="ml-2 rounded-md bg-gray-200 px-3 py-1 text-sm hover:bg-gray-300 dark:bg-slate-800 dark:hover:bg-slate-700"
+                            title="Previous Graph"
+                        >
+                            Previous
+                        </button>
+                        <button
+                            disabled={graphIndex < 0 || graphIndex >= graphsHistory.current.length - 1}
+                            onClick={nextGraph}
+                            className="ml-2 rounded-md bg-gray-200 px-3 py-1 text-sm hover:bg-gray-300 dark:bg-slate-800 dark:hover:bg-slate-700"
+                            title="Next Graph"
+                        >
+                            Next
                         </button>
                     </div>
                 </div>
