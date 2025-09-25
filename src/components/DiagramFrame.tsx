@@ -77,7 +77,7 @@ const Flow = () => {
     const [graphIndex, setGraphIndex] = useState<number>(-1);
     const graphsHistory = useRef<string[]>([]);
     const model = genAI.getGenerativeModel({
-        model: "gemini-2.5-flash",
+        model: "gemini-2.5-pro",
     });
 
     const generationConfig = {
@@ -240,7 +240,7 @@ const Flow = () => {
                 Instructions:
                 - Infer main capabilities from circle/hexagon nodes and relationships.
                 - Divide the code in logical functions based on tasks and sub-goals.
-                - Output ONLY code (no explanations).
+                - Output ONLY code.
                 - Keep code short and focused; avoid placeholders if not necessary.
                 - Assume the language based on the most used for the tasks.
                 - Make the code secure, following OWASP Top 10 and common CWEs.
@@ -249,7 +249,7 @@ const Flow = () => {
                 - Implement proper error handling and logging.
                 - Use HTTPS and secure headers.
                 - Protect against common vulnerabilities (e.g., SQL injection, XSS).
-                - Include minimalistic comments for clarity
+                - Include minimal comments for clarity
                 - Generate a single file with secure functions`;
             const codeGenerationConfig = {
                 ...generationConfig,
