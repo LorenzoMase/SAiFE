@@ -1,5 +1,8 @@
 "use client";
-import React from "react";
+import React, { useMemo } from "react";
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { oneDark, oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { useTheme } from '@/hooks/useTheme';
 
 interface CodeModalProps {
   isOpen: boolean;
@@ -9,6 +12,53 @@ interface CodeModalProps {
 }
 
 const CodeModal: React.FC<CodeModalProps> = ({ isOpen, onClose, code, isLoading }) => {
+  const themeHook = useTheme();
+
+  const detectLanguage = (code: string): string => {
+    const cleanCode = code.trim().toLowerCase();
+    
+    if (cleanCode.includes('import java') || cleanCode.includes('public class') || cleanCode.includes('public static void main')) {
+      return 'java';
+    }
+    if (cleanCode.includes('def ') || cleanCode.includes('import ') && cleanCode.includes('python') || cleanCode.includes('print(')) {
+      return 'python';
+    }
+    if (cleanCode.includes('function ') || cleanCode.includes('const ') || cleanCode.includes('let ') || cleanCode.includes('var ')) {
+      return 'javascript';
+    }
+    if (cleanCode.includes('interface ') || cleanCode.includes(': string') || cleanCode.includes(': number')) {
+      return 'typescript';
+    }
+    if (cleanCode.includes('#include') || cleanCode.includes('int main') || cleanCode.includes('printf')) {
+      return 'c';
+    }
+    if (cleanCode.includes('using namespace') || cleanCode.includes('std::') || cleanCode.includes('cout')) {
+      return 'cpp';
+    }
+    if (cleanCode.includes('using System') || cleanCode.includes('namespace ') || cleanCode.includes('Console.WriteLine')) {
+      return 'csharp';
+    }
+    if (cleanCode.includes('<?php') || cleanCode.includes('echo ') || cleanCode.includes('$_')) {
+      return 'php';
+    }
+    if (cleanCode.includes('SELECT ') || cleanCode.includes('FROM ') || cleanCode.includes('WHERE ')) {
+      return 'sql';
+    }
+    if (cleanCode.includes('<html') || cleanCode.includes('<div') || cleanCode.includes('<p>')) {
+      return 'html';
+    }
+    if (cleanCode.includes('body {') || cleanCode.includes('.class') || cleanCode.includes('#id')) {
+      return 'css';
+    }
+    if (cleanCode.includes('{') && cleanCode.includes('}') && (cleanCode.includes('"') || cleanCode.includes("'"))) {
+      return 'json';
+    }
+    
+    return 'text';
+  };
+
+  const language = useMemo(() => detectLanguage(code), [code]);
+  
   if (!isOpen) return null;
 
   const copyToClipboard = async () => {
@@ -40,13 +90,26 @@ const CodeModal: React.FC<CodeModalProps> = ({ isOpen, onClose, code, isLoading 
             </button>
           </div>
         </div>
-        <div className="max-h-[70vh] overflow-auto rounded-md border border-slate-200 p-2 dark:border-slate-700">
+        <div className="max-h-[70vh] overflow-auto rounded-md border border-slate-200 dark:border-slate-700">
           {isLoading ? (
             <div className="flex h-40 items-center justify-center text-slate-500">Generating code…</div>
           ) : (
-            <pre className="whitespace-pre-wrap text-xs md:text-sm">
-              <code>{code}</code>
-            </pre>
+            <SyntaxHighlighter
+              language={language}
+              style={themeHook.theme === 'dark' ? oneDark : oneLight}
+              customStyle={{
+                margin: 0,
+                padding: '16px',
+                fontSize: '14px',
+                lineHeight: '1.5',
+                borderRadius: '6px',
+              }}
+              showLineNumbers={true}
+              wrapLines={true}
+              wrapLongLines={true}
+            >
+              {code}
+            </SyntaxHighlighter>
           )}
         </div>
       </div>

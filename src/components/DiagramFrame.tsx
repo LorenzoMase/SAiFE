@@ -44,6 +44,7 @@ import {GoogleGenerativeAI} from "@google/generative-ai";
 import ProjectModal from "@components/ProjectModal/Modal";
 import {ClipLoader} from "react-spinners";
 import type { Node, NodeMouseHandler } from "@xyflow/react";
+import { set } from "lodash";
 const nodeTypes: NodeTypes = {
     shape: ShapeNode,
 };
@@ -76,6 +77,7 @@ const Flow = () => {
     const [originalPrompt, setOriginalPrompt] = useState<string>("");
     const [graphIndex, setGraphIndex] = useState<number>(-1);
     const graphsHistory = useRef<string[]>([]);
+    const [secondRequest, setSecondRequest] = useState<boolean>(false);
     const model = genAI.getGenerativeModel({
         model: "gemini-2.5-pro",
     });
@@ -118,7 +120,7 @@ const Flow = () => {
                 - A tree graph in JSON with nodes and edges.
                 - Each node must include x,y coordinates and consistent style.
                 - The graph must follow the rules below.
-
+                
                 Rules:
                 1. General structure:
                     - Only one main functional goal (circle) as the root.
@@ -128,7 +130,7 @@ const Flow = () => {
                 2. Connections:
                     - No duplicate edges between two nodes.
                     - Only edges to soft goals MUST be dotted.
-                    - Dotted edges to soft goals MUST have either a '+' or a '-' label in the middle of the edge.
+                    - Dotted edges to soft goals MUST have a '+' if the impact is positive or a '-' label in the middle of the edge.
                     - A node cannot have both + and - impacts to the same soft goal.
                     - All other edges must be solid.
                 3. AND operator:
@@ -144,6 +146,8 @@ const Flow = () => {
                     - Keep it coincise and simple.
                     - The text of the nodes must NEVER be longer than the node itself.
                     - Remember to implement cybersecurity requirements.
+                    - Use short text for node contents.
+                    - Remember to insert the '+' or '-' label on dotted edges to soft goals.
                     - All nodes must have color #438D57.
                     - Node sizes must be consistent with the provided example.
                     - IMPORTANT: "style.width" and "style.height" must be NUMERIC values, not strings with "px".
@@ -241,6 +245,7 @@ const Flow = () => {
                 - Infer main capabilities from circle/hexagon nodes and relationships.
                 - Divide the code in logical functions based on tasks and sub-goals.
                 - Output ONLY code.
+                - Remove the first line containing the language name.
                 - Keep code short and focused; avoid placeholders if not necessary.
                 - Assume the language based on the most used for the tasks.
                 - Make the code secure, following OWASP Top 10 and common CWEs.
@@ -292,6 +297,7 @@ const Flow = () => {
         try {
             if (JSON.parse(result.response.text())) {
                 diagram.uploadJson(result.response.text());
+                setSecondRequest(true);
                 graphsHistory.current.push(result.response.text());
                 setGraphIndex(graphsHistory.current.length - 1);
             }
@@ -498,7 +504,7 @@ const Flow = () => {
                     </PanelGroup>
                 </ResizablePanel>
             </PanelGroup>
-            {!loading && (
+            {!loading && secondRequest && (
                 <div className="fixed bottom-4 right-4 z-[9998]">
                     <div className="rounded-md bg-white/80 p-2 shadow-md backdrop-blur dark:bg-black/60">
                         <button
