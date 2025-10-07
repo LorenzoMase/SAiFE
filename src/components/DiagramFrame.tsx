@@ -127,7 +127,7 @@ const Flow = () => {
         if (!error) return null;
         
         return (
-            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999]">
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999]" style={{zIndex: 99999}}>
                 <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-xl max-w-md w-full mx-4">
                     <div className="flex items-center space-x-3 mb-4">
                         <div className="flex-shrink-0">
@@ -147,7 +147,7 @@ const Flow = () => {
                             onClick={() => setError("")}
                             className="px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
                         >
-                            Try Again
+                            OK
                         </button>
                     </div>
                 </div>
@@ -276,13 +276,14 @@ const Flow = () => {
                 }
                 Output only the JSON, no explanations.`;
         setOriginalPrompt(originalPrompt);
-        const chatSession = model.startChat({
-            generationConfig,
-            history: []
-        });
-        const result = await chatSession.sendMessage(originalPrompt);
-        setFirstGeminiResult(result.response.text());
         try {
+            const chatSession = model.startChat({
+                generationConfig,
+                history: []
+            });
+            const result = await chatSession.sendMessage(originalPrompt);
+            setFirstGeminiResult(result.response.text());
+            
             if (JSON.parse(result.response.text())) {
                 diagram.uploadJson(result.response.text());
                 console.log(diagram);
@@ -291,7 +292,6 @@ const Flow = () => {
                 setGraphIndex(0);
             }
         } catch (e) {
-            console.log(e);
             setError("An error occurred while generating the diagram. Please try again.");
         } finally {
             setThinking(false);
@@ -333,7 +333,6 @@ const Flow = () => {
             const text = result.response.text();
             setGeneratedCode(text);
         } catch (e) {
-            console.error(e);
             setError("An error occurred while generating the code. Please try again.");
         } finally {
             setCodeLoading(false);
@@ -348,21 +347,23 @@ const Flow = () => {
             : "Do NOT include non-functional requirements (no soft goals, no round-rectangle nodes) in the model.";
     
         const taskPrompt = `Now, focus ONLY on the task: ${taskName}. Generate a small requirements model for this specific task, keeping the context of the original description, and using the same exact rules. The graph must be very small and specific on the single task.\nOutput only the JSON, no explanations.`;
-        const chatSession = model.startChat({
-            generationConfig,
-            history: [
-                {
-                    role: "user",
-                    parts: [ { text: originalPrompt } ]
-                },
-                {
-                    role: "model",
-                    parts: [ { text: firstGeminiResult } ]
-                }
-            ]
-        });
-        const result = await chatSession.sendMessage(taskPrompt);
+        
         try {
+            const chatSession = model.startChat({
+                generationConfig,
+                history: [
+                    {
+                        role: "user",
+                        parts: [ { text: originalPrompt } ]
+                    },
+                    {
+                        role: "model",
+                        parts: [ { text: firstGeminiResult } ]
+                    }
+                ]
+            });
+            const result = await chatSession.sendMessage(taskPrompt);
+            
             if (JSON.parse(result.response.text())) {
                 diagram.uploadJson(result.response.text());
                 setSecondRequest(true);
@@ -370,7 +371,6 @@ const Flow = () => {
                 setGraphIndex(graphsHistory.current.length - 1);
             }
         } catch (e) {
-            console.log(e);
             setError("An error occurred while generating the task diagram. Please try again.");
         } finally {
             setThinking(false);
