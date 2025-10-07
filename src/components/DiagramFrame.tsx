@@ -42,7 +42,6 @@ import {Menu} from "./Menu";
 import CodeModal from "@components/CodeModal/CodeModal";
 import {GoogleGenerativeAI} from "@google/generative-ai";
 import ProjectModal from "@components/ProjectModal/Modal";
-import {ClipLoader} from "react-spinners";
 import type { Node, NodeMouseHandler } from "@xyflow/react";
 import { set } from "lodash";
 const nodeTypes: NodeTypes = {
@@ -78,6 +77,8 @@ const Flow = () => {
     const [graphIndex, setGraphIndex] = useState<number>(-1);
     const graphsHistory = useRef<string[]>([]);
     const [secondRequest, setSecondRequest] = useState<boolean>(false);
+    const [thinking, setThinking] = useState<boolean>(false);
+    const [error, setError] = useState<string>("");
     const model = genAI.getGenerativeModel({
         model: "gemini-2.5-pro",
     });
@@ -90,10 +91,75 @@ const Flow = () => {
         responseMimeType: "application/json",
     };
 
+    const ThinkingIndicator = () => {
+        const [dots, setDots] = useState('');
+        
+        useEffect(() => {
+            if (!thinking) return;
+            
+            const interval = setInterval(() => {
+                setDots(prev => {
+                    if (prev === '...') return '';
+                    return prev + '.';
+                });
+            }, 500);
+            
+            return () => clearInterval(interval);
+        }, [thinking]);
+        
+        if (!thinking) return null;
+        
+        return (
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999]">
+                <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-xl">
+                    <div className="flex items-center space-x-3">
+                        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-emerald-600"></div>
+                        <span className="text-gray-700 dark:text-gray-300 font-medium">
+                            Thinking{dots}
+                        </span>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
+    const ErrorModal = () => {
+        if (!error) return null;
+        
+        return (
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999]">
+                <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-xl max-w-md w-full mx-4">
+                    <div className="flex items-center space-x-3 mb-4">
+                        <div className="flex-shrink-0">
+                            <svg className="w-6 h-6 text-red-500" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                            </svg>
+                        </div>
+                        <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">
+                            Error
+                        </h3>
+                    </div>
+                    <p className="text-gray-700 dark:text-gray-300 mb-6">
+                        {error}
+                    </p>
+                    <div className="flex justify-end">
+                        <button 
+                            onClick={() => setError("")}
+                            className="px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
+                        >
+                            Try Again
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
 
 
     const handleModalSubmit = async (description: string, includeNonFunctional: boolean) => {
-        setLoading(true);
+        setThinking(true);
+        setError("");
         setIsModalOpen(false);
         setOriginalDescription(description);
         setIncludeNonFunctionalState(includeNonFunctional);
@@ -226,9 +292,9 @@ const Flow = () => {
             }
         } catch (e) {
             console.log(e);
-            console.log(result.response.text());
+            setError("An error occurred while generating the diagram. Please try again.");
         } finally {
-            setLoading(false);
+            setThinking(false);
         }
     }
 
@@ -236,6 +302,7 @@ const Flow = () => {
         try {
             setCodeModalOpen(true);
             setCodeLoading(true);
+            setError("");
             const graphJson = getSnapshotJson();
             const codePrompt = `You are a senior software engineer. Given this requirements graph in JSON with nodes and edges, generate secure, based on OWASP top 10 and CWEs, code that reflects the current model.
                 Graph JSON:
@@ -267,14 +334,15 @@ const Flow = () => {
             setGeneratedCode(text);
         } catch (e) {
             console.error(e);
-            setGeneratedCode("// Error generating code. Please try again.");
+            setError("An error occurred while generating the code. Please try again.");
         } finally {
             setCodeLoading(false);
         }
     };
 
     const generateTaskDiagram = async (taskName: string, includeNonFunctional: boolean) => {
-        setLoading(true);
+        setThinking(true);
+        setError("");
         const nonFunctionalInstruction = includeNonFunctional
             ? "Include also non-functional requirements (soft goals, round-rectangle nodes) in the model."
             : "Do NOT include non-functional requirements (no soft goals, no round-rectangle nodes) in the model.";
@@ -303,9 +371,9 @@ const Flow = () => {
             }
         } catch (e) {
             console.log(e);
-            console.log(result.response.text());
+            setError("An error occurred while generating the task diagram. Please try again.");
         } finally {
-            setLoading(false);
+            setThinking(false);
         }
     };
 
@@ -368,22 +436,14 @@ const Flow = () => {
 
     return (
         <div className="w-full h-full">
+            <ThinkingIndicator />
+            <ErrorModal />
             {isModalOpen &&
                 <ProjectModal
                     onSubmit={handleModalSubmit}
                 />
             }
-            {loading &&
-                <div style={{display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh'}}>
-                    <ClipLoader
-                        color={"#438D57"}
-                        loading={loading}
-                        size={150}
-                        aria-label="Loading Spinner"
-                        data-testid="loader"
-                    /></div>
-            }
-            <PanelGroup direction="horizontal" style={{display: loading ? "none" : "block"}}>
+            <PanelGroup direction="horizontal" style={{display: thinking ? "none" : "block"}}>
                 {isLeftSidebarOpen ? (
                     <ResizablePanel
                         order={1}
@@ -504,7 +564,7 @@ const Flow = () => {
                     </PanelGroup>
                 </ResizablePanel>
             </PanelGroup>
-            {!loading && secondRequest && (
+            {!thinking && secondRequest && (
                 <div className="fixed bottom-4 right-4 z-[9998]">
                     <div className="rounded-md bg-white/80 p-2 shadow-md backdrop-blur dark:bg-black/60">
                         <button

@@ -1,5 +1,5 @@
 "use client";
-import React, { useMemo } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark, oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { useTheme } from '@/hooks/useTheme';
@@ -13,6 +13,20 @@ interface CodeModalProps {
 
 const CodeModal: React.FC<CodeModalProps> = ({ isOpen, onClose, code, isLoading }) => {
   const themeHook = useTheme();
+  const [dots, setDots] = useState('');
+
+  useEffect(() => {
+    if (!isLoading) return;
+    
+    const interval = setInterval(() => {
+      setDots(prev => {
+        if (prev === '...') return '';
+        return prev + '.';
+      });
+    }, 500);
+    
+    return () => clearInterval(interval);
+  }, [isLoading]);
 
   const detectLanguage = (code: string): string => {
     const cleanCode = code.trim().toLowerCase();
@@ -92,7 +106,9 @@ const CodeModal: React.FC<CodeModalProps> = ({ isOpen, onClose, code, isLoading 
         </div>
         <div className="max-h-[70vh] overflow-auto rounded-md border border-slate-200 dark:border-slate-700">
           {isLoading ? (
-            <div className="flex h-40 items-center justify-center text-slate-500">Generating code…</div>
+            <div className="flex h-40 items-center justify-center text-slate-500">
+              Thinking{dots}
+            </div>
           ) : (
             <SyntaxHighlighter
               language={language}
