@@ -43,7 +43,7 @@ import CodeModal from "@components/CodeModal/CodeModal";
 import {GoogleGenerativeAI} from "@google/generative-ai";
 import ProjectModal from "@components/ProjectModal/Modal";
 import type { Node, NodeMouseHandler } from "@xyflow/react";
-import { set } from "lodash";
+import { get, set } from "lodash";
 const nodeTypes: NodeTypes = {
     shape: ShapeNode,
 };
@@ -54,6 +54,7 @@ const defaultEdgeOptions: DefaultEdgeOptions = {
 };
 
 const Flow = () => {
+    const [chatSessions, setChatSessions] = useState<{[key: string]: Array<{role: string, parts: Array<{text: string}>}>}>({});
     const diagram = useDiagram();
     const {getSnapshotJson, takeSnapshot} = useUndoRedo();
     const [isRightSidebarOpen, setIsRightSidebarOpen] = useState<boolean>(false);
@@ -89,6 +90,10 @@ const Flow = () => {
         topK: 64,
         maxOutputTokens: 65365,
         responseMimeType: "application/json",
+    };
+
+    const getChatHistory = (sessionKey: string) => {
+        return chatSessions[sessionKey] || [];
     };
 
     const ThinkingIndicator = () => {
@@ -276,19 +281,29 @@ const Flow = () => {
                 }
                 Output only the JSON, no explanations.`;
         setOriginalPrompt(originalPrompt);
+        
         try {
             const chatSession = model.startChat({
                 generationConfig,
                 history: []
             });
             const result = await chatSession.sendMessage(originalPrompt);
-            setFirstGeminiResult(result.response.text());
+            const responseText = result.response.text();
+            setFirstGeminiResult(responseText);
             
-            if (JSON.parse(result.response.text())) {
-                diagram.uploadJson(result.response.text());
+            setChatSessions(prev => ({
+                ...prev,
+                ["main"]: [
+                    { role: "user", parts: [{ text: originalPrompt }] },
+                    { role: "model", parts: [{ text: responseText }] }
+                ]
+            }));
+            
+            if (JSON.parse(responseText)) {
+                diagram.uploadJson(responseText);
                 console.log(diagram);
-                console.log(result.response.text());
-                graphsHistory.current = [result.response.text()];
+                console.log(responseText);
+                graphsHistory.current = [responseText];
                 setGraphIndex(0);
             }
         } catch (e) {
@@ -323,15 +338,31 @@ const Flow = () => {
                 - Protect against common vulnerabilities (e.g., SQL injection, XSS).
                 - Include minimal comments for clarity
                 - Generate a single file with secure functions`;
+            
             const codeGenerationConfig = {
                 ...generationConfig,
                 responseMimeType: "text/plain",
             } as const;
 
-            const chatSession = model.startChat({ generationConfig: codeGenerationConfig, history: [] });
+            const currentHistory = getChatHistory("code");
+            console.log(currentHistory);
+            const chatSession = model.startChat({ 
+                generationConfig: codeGenerationConfig, 
+                history: currentHistory
+            });
+            
             const result = await chatSession.sendMessage(codePrompt);
             const text = result.response.text();
             setGeneratedCode(text);
+            
+            setChatSessions(prev => ({
+                ...prev,
+                ["code"]: [
+                    ...currentHistory,
+                    { role: "user", parts: [{ text: codePrompt }] },
+                    { role: "model", parts: [{ text: text }] }
+                ]
+            }));
         } catch (e) {
             setError("An error occurred while generating the code. Please try again.");
         } finally {
@@ -339,35 +370,35 @@ const Flow = () => {
         }
     };
 
-    const generateTaskDiagram = async (taskName: string, includeNonFunctional: boolean) => {
+    const generateTaskDiagram = async (taskName: string) => {
         setThinking(true);
         setError("");
-        const nonFunctionalInstruction = includeNonFunctional
-            ? "Include also non-functional requirements (soft goals, round-rectangle nodes) in the model."
-            : "Do NOT include non-functional requirements (no soft goals, no round-rectangle nodes) in the model.";
-    
-        const taskPrompt = `Now, focus ONLY on the task: ${taskName}. Generate a small requirements model for this specific task, keeping the context of the original description, and using the same exact rules. The graph must be very small and specific on the single task.\nOutput only the JSON, no explanations.`;
-        
+
+        const taskPrompt = `Now, focus ONLY on the task: ${taskName}. Generate a smaller requirements model than the previous one for this specific task, keeping the context of the original description, and using the same exact rules.\nOutput only the JSON, no explanations.`;
+
         try {
+            const currentHistory = getChatHistory("main");
             const chatSession = model.startChat({
                 generationConfig,
-                history: [
-                    {
-                        role: "user",
-                        parts: [ { text: originalPrompt } ]
-                    },
-                    {
-                        role: "model",
-                        parts: [ { text: firstGeminiResult } ]
-                    }
-                ]
+                history: currentHistory
             });
+            console.log(currentHistory);
             const result = await chatSession.sendMessage(taskPrompt);
-            
-            if (JSON.parse(result.response.text())) {
-                diagram.uploadJson(result.response.text());
+            const responseText = result.response.text();
+            console.log(responseText);
+            setChatSessions(prev => ({
+                ...prev,
+                ["main"]: [
+                    ...currentHistory,
+                    { role: "user", parts: [{ text: taskPrompt }] },
+                    { role: "model", parts: [{ text: responseText }] }
+                ]
+            }));
+            console.log(getChatHistory("main"));
+            if (JSON.parse(responseText)) {
+                diagram.uploadJson(responseText);
                 setSecondRequest(true);
-                graphsHistory.current.push(result.response.text());
+                graphsHistory.current.push(responseText);
                 setGraphIndex(graphsHistory.current.length - 1);
             }
         } catch (e) {
@@ -405,9 +436,9 @@ const Flow = () => {
     const handleNodeClick: NodeMouseHandler = useCallback((event, node: Node) => {
         if (node?.data?.type === "hexagon" && originalDescription) {
             const taskName = String(node.data.contents);
-            generateTaskDiagram(taskName, includeNonFunctionalState);
+            generateTaskDiagram(taskName);
         }
-    }, [originalDescription, includeNonFunctionalState]);
+    }, [originalDescription, chatSessions, generateTaskDiagram]);
 
     const nextGraph = () => {
         if (graphIndex < graphsHistory.current.length - 1) {
