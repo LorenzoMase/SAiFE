@@ -21,6 +21,7 @@ import MiniMapNode from "./minimap-node";
 import {useDiagram} from "@/hooks/useDiagram";
 import {CornerUpLeft, CornerUpRight} from "react-feather";
 import useUndoRedo from "@/hooks/useUndoRedo";
+import { Mistral } from "@mistralai/mistralai";
 import {
     PanelGroup,
     PanelResizeHandle,
@@ -43,7 +44,6 @@ import CodeModal from "@components/CodeModal/CodeModal";
 import {GoogleGenerativeAI} from "@google/generative-ai";
 import ProjectModal from "@components/ProjectModal/Modal";
 import type { Node, NodeMouseHandler } from "@xyflow/react";
-import { get, set } from "lodash";
 const nodeTypes: NodeTypes = {
     shape: ShapeNode,
 };
@@ -54,7 +54,8 @@ const defaultEdgeOptions: DefaultEdgeOptions = {
 };
 
 const Flow = () => {
-    const [chatSessions, setChatSessions] = useState<{[key: string]: Array<{role: string, parts: Array<{text: string}>}>}>({});
+    const [chatSessions, setChatSessions] = useState<{ [key: string]: Array<{role: string, parts: Array<{text: string}>}> }>({});
+    const [codeSessions, setCodeSessions] = useState<Array<{role: "user" | "assistant", content: string}>>([]);
     const diagram = useDiagram();
     const {getSnapshotJson, takeSnapshot} = useUndoRedo();
     const [isRightSidebarOpen, setIsRightSidebarOpen] = useState<boolean>(false);
@@ -64,11 +65,16 @@ const Flow = () => {
     const [originalDescription, setOriginalDescription] = useState<string>("");
     const [includeNonFunctionalState, setIncludeNonFunctionalState] = useState<boolean>(false);
     const themeHook = useTheme();
-    const apiKey = process.env.NEXT_PUBLIC_API_KEY;
-    if (!apiKey) {
-    throw new Error("API_KEY not found");
+    const GeminiApiKey = process.env.NEXT_PUBLIC_API_KEY;
+    if (!GeminiApiKey) {
+    throw new Error("GEMINI_API_KEY not found");
     }
-    const genAI = new GoogleGenerativeAI(apiKey);
+    const genAI = new GoogleGenerativeAI(GeminiApiKey);
+    const MistralApiKey = process.env.NEXT_PUBLIC_MISTRAL_API_KEY;
+    if (!MistralApiKey) {
+        throw new Error("MISTRAL_API_KEY not found");
+    }
+    const mistral = new Mistral({apiKey: MistralApiKey});
     const [loading, setLoading] = useState(false);
     const [codeModalOpen, setCodeModalOpen] = useState(false);
     const [generatedCode, setGeneratedCode] = useState<string>("");
@@ -84,6 +90,8 @@ const Flow = () => {
         model: "gemini-2.5-pro",
     });
 
+    const DEFAULT_MODEL = "codestral-latest";
+
     const generationConfig = {
         temperature: 1,
         topP: 0.95,
@@ -94,6 +102,10 @@ const Flow = () => {
 
     const getChatHistory = (sessionKey: string) => {
         return chatSessions[sessionKey] || [];
+    };
+
+    const getCodeHistory = () => {
+        return codeSessions || [];
     };
 
     const ThinkingIndicator = () => {
@@ -130,7 +142,6 @@ const Flow = () => {
 
     const ErrorModal = () => {
         if (!error) return null;
-        
         return (
             <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999]" style={{zIndex: 99999}}>
                 <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-xl max-w-md w-full mx-4">
@@ -211,8 +222,8 @@ const Flow = () => {
                     - NEVER make nodes overlap.
                     - Edges must NEVER cross other edges or nodes.
                     - Subtrees must be visually well composed and distinguishable.
-                    - Nodes at the same y-axis be at least 200px apart on the x-axis.
-                    - Edges must be at least 30px long.
+                    - Nodes at the same y-axis MUST be at least 400px apart on the x-axis.
+                    - Edges MUST be at least 30px long.
                 5. Style:
                     - Keep it coincise and simple.
                     - The text of the nodes must NEVER be longer than the node itself.
@@ -287,6 +298,7 @@ const Flow = () => {
                 generationConfig,
                 history: []
             });
+
             const result = await chatSession.sendMessage(originalPrompt);
             const responseText = result.response.text();
             setFirstGeminiResult(responseText);
@@ -337,34 +349,65 @@ const Flow = () => {
                 - Use HTTPS and secure headers.
                 - Protect against common vulnerabilities (e.g., SQL injection, XSS).
                 - Include minimal comments for clarity
-                - Generate a single file with secure functions`;
-            
-            const codeGenerationConfig = {
-                ...generationConfig,
-                responseMimeType: "text/plain",
-            } as const;
+                - Generate a single file with secure functions
+                VERY IMPORTANT:
+                - ALWAYS re-use existing already generated code when generating new code.
+                - PUT comments when you reuse existing code to show which parts were already generated.`;
 
-            const currentHistory = getChatHistory("code");
-            console.log(currentHistory);
-            const chatSession = model.startChat({ 
-                generationConfig: codeGenerationConfig, 
-                history: currentHistory
+                
+            const currentHistory = getCodeHistory();
+
+            const messages = currentHistory.length > 0
+                ? [...currentHistory, { role: "user", content: codePrompt }]
+                : [
+                    { role: "user", content: codePrompt }
+                ];
+            
+            console.log("Sending to Mistral:", messages);
+            
+            const result = await mistral.chat.complete({
+                model: DEFAULT_MODEL,
+                messages: messages as any
             });
+
+            let text = "";
+            if (result.choices && result.choices.length > 0 && result.choices[0].message) {
+                const content = result.choices[0].message.content;
+                if (typeof content === 'string') {
+                    text = content;
+                } else if (Array.isArray(content)) {
+                    text = content.map(chunk => {
+                        if (typeof chunk === 'string') {
+                            return chunk;
+                        }
+                        if ('text' in chunk) {
+                            return chunk.text;
+                        }
+                        return '';
+                    }).join('');
+                }
+            }
             
-            const result = await chatSession.sendMessage(codePrompt);
-            const text = result.response.text();
+            if (!text) {
+                text = "Error: No code generated. Please try again.";
+            }
+            
             setGeneratedCode(text);
-            
-            setChatSessions(prev => ({
-                ...prev,
-                ["code"]: [
-                    ...currentHistory,
-                    { role: "user", parts: [{ text: codePrompt }] },
-                    { role: "model", parts: [{ text: text }] }
-                ]
-            }));
+
+            setCodeSessions([
+                ...currentHistory,
+                { role: "user", content: codePrompt }, 
+                { role: "assistant", content: text }
+            ]);
+            console.log("Code sessions:", currentHistory);
+
         } catch (e) {
-            setError("An error occurred while generating the code. Please try again.");
+            console.error("Mistral API Error:", e);
+            if (e instanceof Error) {
+                setError(`Code generation error: ${e.message}`);
+            } else {
+                setError("An error occurred while generating the code. Please try again.");
+            }
         } finally {
             setCodeLoading(false);
         }
@@ -374,7 +417,7 @@ const Flow = () => {
         setThinking(true);
         setError("");
 
-        const taskPrompt = `Now, focus ONLY on the task: ${taskName}. Generate a smaller requirements model than the previous one for this specific task, keeping the context of the original description, and using the same exact rules.\nOutput only the JSON, no explanations.`;
+        const taskPrompt = `Now, focus ONLY on the task: ${taskName}. Generate a smaller requirements graph than the previous one, the number of nodes MUST be reduced, for this specific task, keeping the context of the original description, and using the same exact rules.\nOutput only the JSON, no explanations.`;
 
         try {
             const currentHistory = getChatHistory("main");
@@ -394,7 +437,7 @@ const Flow = () => {
                     { role: "model", parts: [{ text: responseText }] }
                 ]
             }));
-            console.log(getChatHistory("main"));
+
             if (JSON.parse(responseText)) {
                 diagram.uploadJson(responseText);
                 setSecondRequest(true);
