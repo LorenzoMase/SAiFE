@@ -53,9 +53,114 @@ const defaultEdgeOptions: DefaultEdgeOptions = {
     style: {strokeWidth: 2},
 };
 
+const detectProgrammingLanguage = (description: string): string => {
+    const text = description.toLowerCase();
+    
+    const languagePatterns = [
+        {
+            name: "TypeScript",
+            patterns: ["typescript", "ts", "angular", "nest.js", "nestjs", "deno"],
+            keywords: ["interface", "type", "enum", "namespace"],
+            score: 0
+        },
+        {
+            name: "JavaScript",
+            patterns: ["javascript", "js", "node.js", "nodejs", "react", "vue", "express", "npm"],
+            keywords: ["function", "const", "let", "var", "async", "await"],
+            score: 0
+        },
+        {
+            name: "Python",
+            patterns: ["python", "django", "flask", "fastapi", "pandas", "numpy", "pytorch"],
+            keywords: ["def", "class", "import", "from", "__init__"],
+            score: 0
+        },
+        {
+            name: "Java",
+            patterns: ["java", "spring", "springboot", "maven", "gradle", "jvm"],
+            keywords: ["public", "private", "protected", "class", "interface"],
+            score: 0
+        },
+        {
+            name: "C#",
+            patterns: ["c#", "csharp", "\\.net", "dotnet", "asp\\.net", "blazor"],
+            keywords: ["public", "private", "namespace", "using"],
+            score: 0
+        },
+        {
+            name: "Go",
+            patterns: ["golang", "go lang"],
+            keywords: ["func", "package", "import", "goroutine"],
+            score: 0
+        },
+        {
+            name: "Rust",
+            patterns: ["rust", "cargo"],
+            keywords: ["fn", "let", "mut", "struct", "enum", "impl"],
+            score: 0
+        },
+        {
+            name: "PHP",
+            patterns: ["php", "laravel", "symfony", "wordpress"],
+            keywords: ["<\\?php", "function", "class", "\\$"],
+            score: 0
+        },
+        {
+            name: "Ruby",
+            patterns: ["ruby", "rails", "gem"],
+            keywords: ["def", "class", "module", "end"],
+            score: 0
+        },
+        {
+            name: "C++",
+            patterns: ["c\\+\\+", "cpp", "cplusplus"],
+            keywords: ["#include", "namespace", "std::", "class"],
+            score: 0
+        },
+        {
+            name: "C",
+            patterns: ["\\bc\\b", "embedded", "microcontroller"],
+            keywords: ["#include", "stdio.h", "malloc", "printf"],
+            score: 0
+        }
+    ];
+
+    languagePatterns.forEach(lang => {
+        lang.patterns.forEach(pattern => {
+            try {
+                const regex = new RegExp(pattern, 'gi');
+                const matches = (text.match(regex) || []).length;
+                lang.score += matches * 3;
+            } catch (e) {
+                console.warn(`Regex error for pattern "${pattern}":`, e);
+                if (text.includes(pattern.toLowerCase())) {
+                    lang.score += 3;
+                }
+            }
+        });
+
+        lang.keywords.forEach(keyword => {
+            if (text.includes(keyword.toLowerCase())) {
+                lang.score += 2;
+            }
+        });
+
+        if (text.includes(lang.name.toLowerCase())) {
+            lang.score += 5;
+        }
+    });
+
+    const bestMatch = languagePatterns.reduce((best, current) => 
+        current.score > best.score ? current : best
+    );
+
+    return bestMatch.score > 0 ? bestMatch.name : "Python";
+};
+
 const Flow = () => {
     const [chatSessions, setChatSessions] = useState<{ [key: string]: Array<{role: string, parts: Array<{text: string}>}> }>({});
     const [codeSessions, setCodeSessions] = useState<Array<{role: "user" | "assistant", content: string}>>([]);
+    const [codeLanguage, setCodeLanguage] = useState<string>("Python");
     const diagram = useDiagram();
     const {getSnapshotJson, takeSnapshot} = useUndoRedo();
     const [isRightSidebarOpen, setIsRightSidebarOpen] = useState<boolean>(false);
@@ -179,6 +284,8 @@ const Flow = () => {
         setIsModalOpen(false);
         setOriginalDescription(description);
         setIncludeNonFunctionalState(includeNonFunctional);
+        const detectedLanguage = detectProgrammingLanguage(description);
+        setCodeLanguage(detectedLanguage);
         const nonFunctionalInstruction = includeNonFunctional
             ? "Include also non-functional requirements (soft goals, round-rectangle nodes) in the model."
             : "Do NOT include non-functional requirements (no soft goals, no round-rectangle nodes) in the model.";
@@ -331,17 +438,17 @@ const Flow = () => {
             setCodeLoading(true);
             setError("");
             const graphJson = getSnapshotJson();
-            const codePrompt = `You are a senior software engineer. Given this requirements graph in JSON with nodes and edges, generate secure, based on OWASP top 10 and CWEs, code that reflects the current model.
+            const codePrompt = `You are a senior software engineer. Given this requirements graph in JSON with nodes and edges, generate secure, based on OWASP top 10 and CWEs, code that reflects the current model, output ONLY code.
                 Graph JSON:
                 ${graphJson}
 
                 Instructions:
                 - Infer main capabilities from circle/hexagon nodes and relationships.
                 - Divide the code in logical functions based on tasks and sub-goals.
-                - Output ONLY code.
-                - Remove the first line containing the language name.
+                - Output ONLY code NO explanation.
                 - Keep code short and focused; avoid placeholders if not necessary.
-                - Assume the language based on the most used for the tasks.
+                - Use ${codeLanguage} as programming language.
+                - Ensure code is clean, well-structured, and follows best practices.
                 - Make the code secure, following OWASP Top 10 and common CWEs.
                 - Ensure no hardcoded secrets, use environment variables.
                 - Validate and sanitize all inputs.
@@ -350,9 +457,10 @@ const Flow = () => {
                 - Protect against common vulnerabilities (e.g., SQL injection, XSS).
                 - Include minimal comments for clarity
                 - Generate a single file with secure functions
+
                 VERY IMPORTANT:
-                - ALWAYS re-use existing already generated code when generating new code.
-                - PUT comments when you reuse existing code to show which parts were already generated.`;
+                - Output ONLY the code, NO explanations.
+                - ALWAYS re-use the code from previous nodes, comment "reused" if code is reused from previous nodes.`;
 
                 
             const currentHistory = getCodeHistory();
