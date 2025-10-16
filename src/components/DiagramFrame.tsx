@@ -445,7 +445,6 @@ const Flow = () => {
                 Instructions:
                 - Infer main capabilities from circle/hexagon nodes and relationships.
                 - Divide the code in logical functions based on tasks and sub-goals.
-                - Output ONLY code NO explanation.
                 - Keep code short and focused; avoid placeholders if not necessary.
                 - Use ${codeLanguage} as programming language.
                 - Ensure code is clean, well-structured, and follows best practices.
@@ -455,6 +454,7 @@ const Flow = () => {
                 - Implement proper error handling and logging.
                 - Use HTTPS and secure headers.
                 - Protect against common vulnerabilities (e.g., SQL injection, XSS).
+                - If ${codeLanguage} is Java, implement a single class.
                 - Include minimal comments for clarity
                 - Generate a single file with secure functions
 
