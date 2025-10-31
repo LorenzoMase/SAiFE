@@ -1,4 +1,4 @@
-import { NodeToolbar } from "@xyflow/react";
+import { NodeToolbar, Position } from "@xyflow/react";
 import { ShapeType } from "../shape/types";
 import { Trash2 } from "react-feather";
 import { useEffect, useState } from "react";
@@ -25,7 +25,11 @@ function ShapeNodeToolbar({
   ];
 
   return (
-    <NodeToolbar className="nowheel nodrag flex flex-col" offset={32}>
+    <NodeToolbar 
+      className="nowheel nodrag flex flex-col" 
+      position={Position.Bottom}
+      offset={10}
+    >
       <div className="flex flex-col gap-2">
         <div className="flex flex-row gap-0.5">
           {colors.map((color) => (

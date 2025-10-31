@@ -44,6 +44,8 @@ import CodeModal from "@components/CodeModal/CodeModal";
 import {GoogleGenerativeAI} from "@google/generative-ai";
 import ProjectModal from "@components/ProjectModal/Modal";
 import type { Node, NodeMouseHandler } from "@xyflow/react";
+import HexagonTooltip from "@components/HexagonTooltip/HexagonTooltip";
+
 const nodeTypes: NodeTypes = {
     shape: ShapeNode,
 };
@@ -162,6 +164,7 @@ const Flow = () => {
     const [codeSessions, setCodeSessions] = useState<Array<{role: "user" | "assistant", content: string}>>([]);
     const [codeLanguage, setCodeLanguage] = useState<string>("Python");
     const diagram = useDiagram();
+    const { setNodes } = diagram.useReactFlow();
     const {getSnapshotJson, takeSnapshot} = useUndoRedo();
     const [isRightSidebarOpen, setIsRightSidebarOpen] = useState<boolean>(false);
     const [isLeftSidebarOpen, setIsLeftSidebarOpen] = useState<boolean>(false);
@@ -191,6 +194,15 @@ const Flow = () => {
     const [secondRequest, setSecondRequest] = useState<boolean>(false);
     const [thinking, setThinking] = useState<boolean>(false);
     const [error, setError] = useState<string>("");
+    const [hexagonTooltip, setHexagonTooltip] = useState<{
+        nodeId: string;
+        taskName: string;
+        position: { x: number; y: number };
+        graphIndex: number;
+    } | null>(null);
+    const [hexagonsWithCode, setHexagonsWithCode] = useState<Set<string>>(new Set());
+    const [codeCache, setCodeCache] = useState<Map<string, string>>(new Map());
+    const [graphCache, setGraphCache] = useState<Map<string, number>>(new Map());
     const model = genAI.getGenerativeModel({
         model: "gemini-2.5-pro",
     });
@@ -432,11 +444,19 @@ const Flow = () => {
         }
     }
 
-    const generateCodeFromGraph = async () => {
+    const generateCodeFromGraph = async (cacheKey?: string) => {
         try {
             setCodeModalOpen(true);
             setCodeLoading(true);
             setError("");
+            
+            if (cacheKey && codeCache.has(cacheKey)) {
+                const cachedCode = codeCache.get(cacheKey)!;
+                setGeneratedCode(cachedCode);
+                setCodeLoading(false);
+                return;
+            }
+            
             const graphJson = getSnapshotJson();
             const codePrompt = `You are a senior software engineer. Given this requirements graph in JSON with nodes and edges, and this description: ${originalDescription} generate secure, based on OWASP top 10 and CWEs, code that reflects the current model, output ONLY code.
                 Graph JSON:
@@ -502,7 +522,10 @@ const Flow = () => {
                 { role: "user", content: codePrompt }, 
                 { role: "assistant", content: text }
             ]);
-            console.log("Code sessions:", currentHistory);
+            
+            if (cacheKey) {
+                setCodeCache(prev => new Map(prev).set(cacheKey, text));
+            }
 
         } catch (e) {
             console.error("Mistral API Error:", e);
@@ -516,7 +539,7 @@ const Flow = () => {
         }
     };
 
-    const generateTaskDiagram = async (taskName: string) => {
+    const generateTaskDiagram = async (taskName: string, nodeId?: string) => {
         setThinking(true);
         setError("");
 
@@ -547,7 +570,12 @@ const Flow = () => {
                 diagram.uploadJson(responseText);
                 setSecondRequest(true);
                 graphsHistory.current.push(responseText);
-                setGraphIndex(graphsHistory.current.length - 1);
+                const newGraphIndex = graphsHistory.current.length - 1;
+                setGraphIndex(newGraphIndex);
+                
+                if (nodeId) {
+                    setGraphCache(prev => new Map(prev).set(nodeId, newGraphIndex));
+                }
             }
         } catch (e) {
             setError("An error occurred while generating the task diagram. Please try again.");
@@ -580,13 +608,62 @@ const Flow = () => {
         "editable-edge": EditableEdgeWrapper,
     };
 
-
-    const handleNodeClick: NodeMouseHandler = useCallback((event, node: Node) => {
+    const handleNodeMouseEnter: NodeMouseHandler = useCallback((event, node: Node) => {
         if (node?.data?.type === "hexagon" && originalDescription) {
             const taskName = String(node.data.contents);
-            generateTaskDiagram(taskName);
+            const rect = (event.target as HTMLElement).getBoundingClientRect();
+            setHexagonTooltip({
+                nodeId: node.id,
+                taskName,
+                position: {
+                    x: rect.left + rect.width / 2,
+                    y: rect.top
+                },
+                graphIndex: graphIndex
+            });
         }
-    }, [originalDescription, chatSessions, generateTaskDiagram]);
+    }, [originalDescription, graphIndex]);
+
+    const handleGenerateCodeFromTask = useCallback((taskName: string, nodeId: string, currentGraphIndex: number) => {
+        const cacheKey = `${currentGraphIndex}_${nodeId}`;
+        
+        setNodes((nodes) =>
+            nodes.map((node) => {
+                if (node.id === nodeId) {
+                    return {
+                        ...node,
+                        data: {
+                            ...node.data,
+                            color: "#F7931E",
+                        },
+                    };
+                }
+                return node;
+            })
+        );
+        
+        setHexagonsWithCode(prev => new Set(prev).add(cacheKey));
+        
+        generateCodeFromGraph(cacheKey);
+        
+        setTimeout(() => {
+            const event = new CustomEvent('saveGraphToHistory');
+            window.dispatchEvent(event);
+        }, 100);
+    }, [setNodes, generateCodeFromGraph]);
+
+    const handleGenerateGraphFromTask = useCallback((taskName: string, nodeId: string, currentGraphIndex: number) => {
+        const cacheKey = `${currentGraphIndex}_${nodeId}`;
+        
+        if (graphCache.has(cacheKey)) {
+            const cachedGraphIndex = graphCache.get(cacheKey)!;
+            setGraphIndex(cachedGraphIndex);
+            const graph = graphsHistory.current[cachedGraphIndex];
+            diagram.uploadJson(graph);
+        } else {
+            generateTaskDiagram(taskName, cacheKey);
+        }
+    }, [graphCache, generateTaskDiagram, diagram]);
 
     const nextGraph = () => {
         if (graphIndex < graphsHistory.current.length - 1) {
@@ -602,6 +679,14 @@ const Flow = () => {
             const newIndex = graphIndex - 1;
             setGraphIndex(newIndex);
             const graph = graphsHistory.current[newIndex];
+            diagram.uploadJson(graph);
+        }
+    };
+
+    const homeGraph = () => {
+        if (graphIndex !== 0 && graphsHistory.current.length > 0) {
+            setGraphIndex(0);
+            const graph = graphsHistory.current[0];
             diagram.uploadJson(graph);
         }
     };
@@ -690,7 +775,7 @@ const Flow = () => {
                                 onSelectionDragStart={diagram.onSelectionDragStart}
                                 onSelectionDragStop={diagram.onSelectionDragStop}
                                 onNodesDelete={diagram.onNodesDelete}
-                                onNodeClick={handleNodeClick}
+                                onNodeMouseEnter={handleNodeMouseEnter}
                                 onEdgesDelete={diagram.onEdgesDelete}
                                 onEdgeClick={diagram.onEdgeClick}
                                 elevateEdgesOnSelect
@@ -770,28 +855,20 @@ const Flow = () => {
                 <div className="fixed bottom-4 right-4 z-[9998]">
                     <div className="rounded-md bg-white/80 p-2 shadow-md backdrop-blur dark:bg-black/60">
                         <button
-                            disabled={!originalDescription || codeLoading}
-                            onClick={generateCodeFromGraph}
-                            className="rounded-md bg-emerald-600 px-3 py-1 text-sm text-white hover:bg-emerald-700"
-                            title="Generate Code"
-                            >
-                            Generate Code
+                            disabled={graphIndex === 0}
+                            onClick={homeGraph}
+                            className="rounded-md bg-blue-600 px-3 py-1 text-sm text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                            title="Go to First Graph"
+                        >
+                            Home
                         </button>
                         <button
                             disabled={graphIndex <= 0}
                             onClick={previousGraph}
-                            className="ml-2 rounded-md bg-gray-200 px-3 py-1 text-sm hover:bg-gray-300 dark:bg-slate-800 dark:hover:bg-slate-700"
+                            className="ml-2 rounded-md bg-gray-200 px-3 py-1 text-sm hover:bg-gray-300 dark:bg-slate-800 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
                             title="Previous Graph"
                         >
                             Previous
-                        </button>
-                        <button
-                            disabled={graphIndex < 0 || graphIndex >= graphsHistory.current.length - 1}
-                            onClick={nextGraph}
-                            className="ml-2 rounded-md bg-gray-200 px-3 py-1 text-sm hover:bg-gray-300 dark:bg-slate-800 dark:hover:bg-slate-700"
-                            title="Next Graph"
-                        >
-                            Next
                         </button>
                     </div>
                 </div>
@@ -802,6 +879,18 @@ const Flow = () => {
                 code={generatedCode}
                 isLoading={codeLoading}
             />
+            {hexagonTooltip && (
+                <HexagonTooltip
+                    nodeId={hexagonTooltip.nodeId}
+                    taskName={hexagonTooltip.taskName}
+                    position={hexagonTooltip.position}
+                    onGenerateCode={(taskName) => handleGenerateCodeFromTask(taskName, hexagonTooltip.nodeId, hexagonTooltip.graphIndex)}
+                    onGenerateGraph={(taskName) => handleGenerateGraphFromTask(taskName, hexagonTooltip.nodeId, hexagonTooltip.graphIndex)}
+                    onClose={() => setHexagonTooltip(null)}
+                    hasCode={codeCache.has(`${hexagonTooltip.graphIndex}_${hexagonTooltip.nodeId}`)}
+                    hasGraph={graphCache.has(`${hexagonTooltip.graphIndex}_${hexagonTooltip.nodeId}`)}
+                />
+            )}
         </div>
     );
 };
