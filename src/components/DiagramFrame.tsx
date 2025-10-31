@@ -686,7 +686,9 @@ const Flow = () => {
                                 zoomOnDoubleClick={false}
                                 onNodesChange={diagram.onNodesChange}
                                 onNodeDragStart={diagram.onNodeDragStart}
+                                onNodeDragStop={diagram.onNodeDragStop}
                                 onSelectionDragStart={diagram.onSelectionDragStart}
+                                onSelectionDragStop={diagram.onSelectionDragStop}
                                 onNodesDelete={diagram.onNodesDelete}
                                 onNodeClick={handleNodeClick}
                                 onEdgesDelete={diagram.onEdgesDelete}

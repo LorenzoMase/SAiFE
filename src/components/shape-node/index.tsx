@@ -65,13 +65,26 @@ const ShapeNode = ({id, selected, data}: any) => {
                 return node;
             })
         );
+        
+        setTimeout(() => {
+            const event = new CustomEvent('saveGraphToHistory');
+            window.dispatchEvent(event);
+        }, 100);
     };
 
     const onResize = () => {
         updateNodeInternals(id);
     };
+    
+    const onResizeEnd = () => {
+        setTimeout(() => {
+            const event = new CustomEvent('saveGraphToHistory');
+            window.dispatchEvent(event);
+        }, 100);
+    };
 
     const onContentsChange = (contents: any) => {
+        takeSnapshot();
         setNodes((nodes) =>
             nodes.map((node) => {
                 if (node.id === id && node.data.type !== "capsule") {
@@ -87,6 +100,11 @@ const ShapeNode = ({id, selected, data}: any) => {
                 return node;
             })
         );
+        
+        setTimeout(() => {
+            const event = new CustomEvent('saveGraphToHistory');
+            window.dispatchEvent(event);
+        }, 100);
     };
 
     const onDeleteNode = () => {
@@ -159,6 +177,7 @@ const ShapeNode = ({id, selected, data}: any) => {
                 isVisible={selected}
                 onResize={onResize}
                 onResizeStart={takeSnapshot}
+                onResizeEnd={onResizeEnd}
             />
             <div style={{position: "relative"}}>
                 <Shape

@@ -163,6 +163,11 @@ export const useDiagram = () => {
     setNodes((nodes) =>
       nodes.map((n) => ({ ...n, selected: false })).concat([newNode])
     );
+    
+    setTimeout(() => {
+      const event = new CustomEvent('saveGraphToHistory');
+      window.dispatchEvent(event);
+    }, 100);
   };
 
   const onNodesChange = useCallback(
@@ -244,10 +249,24 @@ export const useDiagram = () => {
   const onNodeDragStart: OnNodeDrag = useCallback(() => {
     takeSnapshot();
   }, [takeSnapshot]);
+  
+  const onNodeDragStop: OnNodeDrag = useCallback(() => {
+    setTimeout(() => {
+      const event = new CustomEvent('saveGraphToHistory');
+      window.dispatchEvent(event);
+    }, 100);
+  }, []);
 
   const onSelectionDragStart: SelectionDragHandler = useCallback(() => {
     takeSnapshot();
   }, [takeSnapshot]);
+  
+  const onSelectionDragStop: SelectionDragHandler = useCallback(() => {
+    setTimeout(() => {
+      const event = new CustomEvent('saveGraphToHistory');
+      window.dispatchEvent(event);
+    }, 100);
+  }, []);
 
   const onNodesDelete: OnNodesDelete = useCallback(() => {
     takeSnapshot();
@@ -290,7 +309,9 @@ export const useDiagram = () => {
     helperLineHorizontal,
     helperLineVertical,
     onNodeDragStart,
+    onNodeDragStop,
     onSelectionDragStart,
+    onSelectionDragStop,
     onNodesDelete,
     onEdgesDelete,
     undo,
