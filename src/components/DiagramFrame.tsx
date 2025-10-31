@@ -186,6 +186,7 @@ const Flow = () => {
     const [firstGeminiResult, setFirstGeminiResult] = useState<string>("");
     const [originalPrompt, setOriginalPrompt] = useState<string>("");
     const [graphIndex, setGraphIndex] = useState<number>(-1);
+    const graphIndexRef = useRef<number>(-1);
     const graphsHistory = useRef<string[]>([]);
     const [secondRequest, setSecondRequest] = useState<boolean>(false);
     const [thinking, setThinking] = useState<boolean>(false);
@@ -604,6 +605,27 @@ const Flow = () => {
             diagram.uploadJson(graph);
         }
     };
+    
+    useEffect(() => {
+        const handleSaveGraphToHistory = () => {
+            const currentGraph = getSnapshotJson();
+            const currentIndex = graphIndexRef.current;
+
+            if (currentGraph && currentIndex >= 0) {
+                graphsHistory.current[currentIndex] = currentGraph;
+            }
+        };
+        
+        window.addEventListener('saveGraphToHistory', handleSaveGraphToHistory);
+        
+        return () => {
+            window.removeEventListener('saveGraphToHistory', handleSaveGraphToHistory);
+        };
+    }, [getSnapshotJson]);
+    
+    useEffect(() => {
+        graphIndexRef.current = graphIndex;
+    }, [graphIndex]);
     
     useEffect(() => {
         return () => {

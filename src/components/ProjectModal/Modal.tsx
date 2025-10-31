@@ -38,7 +38,7 @@ const ProjectModal = ({onSubmit}: ModalProps) => {
                                         id="project-description"
                                         value={description}
                                         onChange={(e) => setDescription(e.target.value)}
-                                        rows={3}/>
+                                        rows={3}></textarea>
                                     <div className="flex items-center mt-2">
                                         <input
                                             id="include-non-functional"
