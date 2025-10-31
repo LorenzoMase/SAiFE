@@ -180,7 +180,6 @@ const Flow = () => {
         throw new Error("MISTRAL_API_KEY not found");
     }
     const mistral = new Mistral({apiKey: MistralApiKey});
-    const [loading, setLoading] = useState(false);
     const [codeModalOpen, setCodeModalOpen] = useState(false);
     const [generatedCode, setGeneratedCode] = useState<string>("");
     const [codeLoading, setCodeLoading] = useState(false);
@@ -438,29 +437,26 @@ const Flow = () => {
             setCodeLoading(true);
             setError("");
             const graphJson = getSnapshotJson();
-            const codePrompt = `You are a senior software engineer. Given this requirements graph in JSON with nodes and edges, generate secure, based on OWASP top 10 and CWEs, code that reflects the current model, output ONLY code.
+            const codePrompt = `You are a senior software engineer. Given this requirements graph in JSON with nodes and edges, and this description: ${originalDescription} generate secure, based on OWASP top 10 and CWEs, code that reflects the current model, output ONLY code.
                 Graph JSON:
                 ${graphJson}
 
                 Instructions:
-                - Infer main capabilities from circle/hexagon nodes and relationships.
+                - Implement what is written in the graph, knowing that every code generated must work together to form a complete software system.
                 - Divide the code in logical functions based on tasks and sub-goals.
                 - Keep code short and focused; avoid placeholders if not necessary.
                 - Use ${codeLanguage} as programming language.
                 - Ensure code is clean, well-structured, and follows best practices.
                 - Make the code secure, following OWASP Top 10 and common CWEs.
-                - Ensure no hardcoded secrets, use environment variables.
-                - Validate and sanitize all inputs.
-                - Implement proper error handling and logging.
-                - Use HTTPS and secure headers.
                 - Protect against common vulnerabilities (e.g., SQL injection, XSS).
-                - If ${codeLanguage} is Java, implement a single class.
-                - Include minimal comments for clarity
-                - Generate a single file with secure functions
+                - If ${codeLanguage} is Java, implement a runnable single class.
+                - Generate a single file with secure functions.
+                - The code MUST be consistent with other previously generated code.
+                - If no code is needed, respond with "No code needed for this model."
 
                 VERY IMPORTANT:
                 - Output ONLY the code, NO explanations.
-                - ALWAYS re-use the code from previous nodes, comment "reused" if code is reused from previous nodes.`;
+                - Do not implement already implemented functions, you MUST include code snippets from previous completions.`;
 
                 
             const currentHistory = getCodeHistory();
@@ -470,8 +466,6 @@ const Flow = () => {
                 : [
                     { role: "user", content: codePrompt }
                 ];
-            
-            console.log("Sending to Mistral:", messages);
             
             const result = await mistral.chat.complete({
                 model: DEFAULT_MODEL,
@@ -525,7 +519,9 @@ const Flow = () => {
         setThinking(true);
         setError("");
 
-        const taskPrompt = `Now, focus ONLY on the task: ${taskName}. Generate a smaller requirements graph than the previous one, the number of nodes MUST be reduced, for this specific task, keeping the context of the original description, and using the same exact rules.\nOutput only the JSON, no explanations.`;
+        const taskPrompt = `Now, focus ONLY on the task: ${taskName}. Generate a smaller requirements graph than the previous one, the number of nodes MUST be reduced, for this specific task, keeping the context of the original description, and using the same exact rules.
+        NEVER include nodes that are not related to this specific task, or that are already implemented in previous graphs.
+        \nOutput only the JSON, no explanations.`;
 
         try {
             const currentHistory = getChatHistory("main");
